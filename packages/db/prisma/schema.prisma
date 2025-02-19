@@ -18,7 +18,7 @@ model User{
   username     String @unique
   password     String
   sheets      Sheet[]
-  events       Event[]
+  // events       Event[]
 }
 
 model Sheet{
@@ -29,23 +29,23 @@ model Sheet{
   userId       String
   user         User @relation(fields: [userId], references: [id])
   lastUpdateId Int
-  events       Event[]
+  // events       Event[]
 }
 
-model Event{
-  id           Int @id @default(autoincrement())
-  type         EditType
-  userId       String
-  lineNumber   Int
-  column       Int
-  content      String
-  sheetId      String
-  sheet        Sheet @relation(fields: [sheetId],references: [id])
-  user         User @relation(fields: [userId],references: [id])
+// model Event{
+//   id           Int @id @default(autoincrement())
+//   type         EditType
+//   userId       String
+//   lineNumber   Int
+//   column       Int
+//   content      String
+//   sheetId      String
+//   sheet        Sheet @relation(fields: [sheetId],references: [id])
+//   user         User @relation(fields: [userId],references: [id])
 
-}
+// }
 
-enum EditType{
-  ADD
-  DELETE
-}
+// enum EditType{
+//   ADD
+//   DELETE
+// }

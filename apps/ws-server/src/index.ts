@@ -1,5 +1,6 @@
 import { createServer } from "http";
 import { Server } from "socket.io";
+import { redisManager } from "./redisManager";
 
 const httpServer = createServer();
 const io = new Server(httpServer, {
@@ -11,14 +12,23 @@ const io = new Server(httpServer, {
 
 io.on("connection", socket => {
   socket.on("get-document", async documentId => {
-    socket.join(documentId)
+    socket.join(documentId);
+    const events = await redisManager.getQueue('123');
+    if (events && events.length > 0) {
+      socket.emit("load-events", events);
+    }
 
-    socket.on("send-changes", delta => {
-      socket.broadcast.to(documentId).emit("receive-changes", delta)
+    socket.on("send-changes", async delta => {
+      socket.broadcast.to(documentId).emit("receive-changes", delta);
+      await redisManager.pushToQueue('123', delta)
     })
+    
 
-    // socket.on("save-document", async data => {
-    // })
+    socket.on("delete-queue", async (data) => {
+      console.log('delete-queue', data);
+      if(data === 0) return;
+      await redisManager.removeFromQueue('123', data);
+    })
   })
 })
 

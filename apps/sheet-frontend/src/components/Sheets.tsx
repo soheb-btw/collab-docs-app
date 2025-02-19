@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useState, useRef} from "react"
 import Quill from "quill"
 import "quill/dist/quill.snow.css"
 import { io } from "socket.io-client"
 import { useParams } from "react-router-dom"
+import axios from "axios"
 
-const SAVE_INTERVAL_MS = 2000
+const SAVE_INTERVAL_MS = 10000
 const TOOLBAR_OPTIONS = [
   [{ header: [1, 2, 3, 4, 5, 6, false] }],
   [{ font: [] }],
@@ -19,8 +20,9 @@ const TOOLBAR_OPTIONS = [
 
 export default function TextEditor() {
   const { id: documentId } = useParams()
-  const [ socket, setSocket] = useState()
-  const [quill, setQuill] = useState()
+  const [socket, setSocket] = useState()
+  const [quill, setQuill] = useState();
+  const eventsLength = useRef(0);
 
   useEffect(() => {
     const s = io("http://localhost:3001")
@@ -34,36 +36,57 @@ export default function TextEditor() {
   useEffect(() => {
     if (socket == null || quill == null) return
 
-    socket.once("load-document", document => {
-      quill.setContents(document)
-      quill.enable()
-    })
-
-    socket.emit("get-document", documentId)
-  }, [socket, quill, documentId])
-
-  useEffect(() => {
-    if (socket == null || quill == null) return
-
-    const interval = setInterval(() => {
-      socket.emit("save-document", quill.getContents())
+    const interval = setInterval(async() => {
+      // socket.emit("save-document", quill.getContents())
+      const document = quill.getText();
+      await axios.put(`http://localhost:3000/sheet/123`, {content: document});
+      socket.emit('delete-queue', eventsLength.current);
+      eventsLength.current = 0;
     }, SAVE_INTERVAL_MS)
 
     return () => {
       clearInterval(interval)
     }
-  }, [socket, quill])
+  }, [socket, quill]);
+
+  useEffect(() => {
+
+    async function getSheets() {
+      if (socket == null || quill == null) return;
+
+      const response = await axios.get(`http://localhost:3000/sheet`);
+      console.log(response.data[0].content);
+      quill.setText(response.data[0].content);
+      quill.enable();
+
+      socket.emit("get-document", documentId)
+    }
+
+    getSheets();
+  }, [quill, socket]);
+  
 
   useEffect(() => {
     if (socket == null || quill == null) return
 
-    const handler = delta => {
+    const receiveChangesHandler = delta => {
       quill.updateContents(delta)
     }
-    socket.on("receive-changes", handler)
+
+    const loadEventsHandler = events => {
+      events.forEach(event => {   
+        console.log(event);     
+        quill.updateContents(event);
+      });
+    }
+    
+    socket.on("receive-changes", receiveChangesHandler)
+
+    socket.on("load-events", loadEventsHandler);
 
     return () => {
-      socket.off("receive-changes", handler)
+      socket.off("receive-changes", receiveChangesHandler);
+      socket.off("load-events", loadEventsHandler);
     }
   }, [socket, quill])
 
@@ -72,6 +95,8 @@ export default function TextEditor() {
 
     const handler = (delta, oldDelta, source) => {
       if (source !== "user") return
+      eventsLength.current = eventsLength.current + 1;
+
       socket.emit("send-changes", delta)
     }
     quill.on("text-change", handler)
